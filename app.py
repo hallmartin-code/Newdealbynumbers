@@ -243,7 +243,7 @@ PAGE = r"""
     </div>
 
     <div class="card">
-      <div class="eyebrow">Deck Analyzer</div>
+      <div class="eyebrow">Deal by the Numbers</div>
       <h1>Pitch Deck<span class="arrow">&rarr;</span><span class="to">Investor One&#8209;Pager</span></h1>
       <p class="lede">Upload a pitch deck and get a polished single-page investor PDF,
         analyzed and structured by Claude.</p>
