@@ -1,0 +1,14 @@
+[browser]
+# Privacy: do not send Streamlit usage statistics.
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#ED5644"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F7F7F7"
+textColor = "#000000"
+font = "sans serif"

@@ -1,0 +1,117 @@
+{
+  "company_name": "Northpeak Cold Chain",
+  "thesis": "Northpeak's predictive sensors cut pilot customers' spoilage by 31% and have reached 14 paying customers with 118% net revenue retention, and it is raising a $4.0M Seed SAFE to scale sales.",
+  "sector": "Supply chain / IoT software",
+  "stage": "Seed",
+  "reporting_currency": "USD",
+  "deck_date": "2026",
+  "key_metric_ids": ["paying_customers", "nrr", "raise_target", "valuation_cap", "tam"],
+  "sections": {
+    "problem": {
+      "summary": "US regional food distributors lose 4-6% of perishable inventory to temperature excursions, and current loggers only report losses after the fact.",
+      "metrics": [
+        {"id": "spoilage_rate", "label": "of perishable inventory lost to excursions", "value": "4-6%", "numeric_value": null, "unit": "%", "period": "2025 survey", "kind": "problem_scale", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 2"]},
+        {"id": "spoilage_cost", "label": "annual spoilage write-offs, typical customer", "value": "$3.6M", "numeric_value": 3600000, "unit": "USD", "period": "annual", "kind": "problem_cost", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 2"]}
+      ],
+      "points": [
+        {"text": "Figures come from the company's own survey of 40 distributors, not an independent study.", "evidence": "reported", "source_refs": ["Slide 2"]}
+      ],
+      "missing": []
+    },
+    "solution": {
+      "summary": "Wireless sensors and prediction software alert warehouse staff about 6 hours before a temperature excursion, and install in one day per warehouse.",
+      "metrics": [
+        {"id": "spoilage_reduction", "label": "spoilage reduction in pilots", "value": "31%", "numeric_value": 31, "unit": "%", "period": "6 months", "kind": "customer_benefit", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 3"]},
+        {"id": "alert_lead_time", "label": "warning before excursion", "value": "~6 hours", "numeric_value": 6, "unit": "hours", "kind": "customer_benefit", "timeframe": "n/a", "evidence": "reported", "source_refs": ["Slide 3"]},
+        {"id": "customer_savings", "label": "estimated annual savings per typical customer", "value": "$1.1M", "numeric_value": 1116000, "unit": "USD", "kind": "customer_benefit", "timeframe": "n/a", "evidence": "estimated", "method": "Typical customer's spoilage write-offs multiplied by the pilot spoilage reduction.", "assumptions": ["Typical customer write-offs of $3.6M a year (Slide 2)", "The 31% pilot reduction (Slide 3) holds at full deployment", "No change in product mix or volume"], "range_low": "$0.7M", "range_high": "$1.1M", "confidence": "medium", "source_refs": ["Slide 2", "Slide 3"]}
+      ],
+      "points": [],
+      "missing": ["Price per warehouse or per sensor"]
+    },
+    "team": {
+      "summary": "Operator-led founding team pairing distribution operations with IoT engineering; the sales leader role is open.",
+      "metrics": [],
+      "points": [],
+      "missing": ["Head of Sales (hiring)"],
+      "members": [
+        {"name": "Dana Whitfield", "role": "CEO", "background": "Former VP Operations at a regional food distributor (12 years)", "source_refs": ["Slide 7"]},
+        {"name": "Ravi Menon", "role": "CTO", "background": "IoT engineering lead; 2 prior startups, 1 acquired", "source_refs": ["Slide 7"]}
+      ]
+    },
+    "traction": {
+      "summary": "14 paying customers with 118% net revenue retention, plus 5 pilots and 3 signed letters of intent from national grocery chains.",
+      "metrics": [
+        {"id": "arr", "label": "ARR", "value": null, "numeric_value": null, "unit": "USD", "period": "2026", "kind": "arr", "timeframe": "actual", "evidence": "conflicting", "source_refs": ["Slide 4", "Slide 10"], "conflicting_values": [{"value": "$1.2M (June 2026)", "source_ref": "Slide 4"}, {"value": "$1.4M (\"current\")", "source_ref": "Slide 10"}]},
+        {"id": "paying_customers", "label": "paying customers", "value": "14", "numeric_value": 14, "unit": "customers", "period": "2026", "kind": "paying_customers", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 4"]},
+        {"id": "nrr", "label": "net revenue retention", "value": "118%", "numeric_value": 118, "unit": "%", "period": "trailing 12 months", "kind": "retention", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 4"]},
+        {"id": "pilots", "label": "pilots in progress (not paying)", "value": "5", "numeric_value": 5, "unit": "pilots", "period": "2026", "kind": "pilots", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 4"]}
+      ],
+      "points": [
+        {"text": "3 signed letters of intent from national grocery chains; LOIs are not contracts.", "evidence": "reported", "source_refs": ["Slide 4"]}
+      ],
+      "missing": ["Revenue recognized to date", "Gross margin actuals"]
+    },
+    "market_size": {
+      "summary": "A $1.1B US serviceable market, sized bottom-up, within a $9.4B global cold-chain monitoring market.",
+      "metrics": [
+        {"id": "tam", "label": "TAM", "value": "$9.4B", "numeric_value": 9400000000, "unit": "USD", "kind": "tam", "timeframe": "n/a", "evidence": "reported", "source_refs": ["Slide 5"], "geography": "Global", "year": "2026", "sizing_method": "third-party report"},
+        {"id": "sam", "label": "SAM", "value": "$1.1B", "numeric_value": 1092000000, "unit": "USD", "kind": "sam", "timeframe": "n/a", "evidence": "reported", "source_refs": ["Slide 5"], "geography": "US regional distributors", "year": "2026", "sizing_method": "bottom-up, 2,600 x $420K"},
+        {"id": "som", "label": "SOM", "value": "$33M", "numeric_value": 33000000, "unit": "USD", "kind": "som", "timeframe": "forecast", "evidence": "estimated", "method": "Share of SAM reachable within five years.", "assumptions": ["3% of the $1.1B SAM (about 78 distributors) within five years", "Seed-stage sales capacity after a Head of Sales is hired"], "range_low": "$22M", "range_high": "$44M", "confidence": "low", "source_refs": ["Slide 5"], "geography": "US regional distributors", "year": "2031", "sizing_method": "share of SAM"}
+      ],
+      "points": [],
+      "missing": ["Name and date of the third-party TAM report"]
+    },
+    "competitive_advantage": {
+      "summary": "Predictive alerts rather than after-the-fact logging, backed by a model trained on 3.2 billion sensor readings.",
+      "metrics": [
+        {"id": "sensor_readings", "label": "sensor readings in training data", "value": "3.2B", "numeric_value": 3200000000, "unit": "readings", "kind": "other", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 6"]},
+        {"id": "patents_pending", "label": "US patents pending", "value": "2", "numeric_value": 2, "unit": "patents", "kind": "ip", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 6"]}
+      ],
+      "points": [],
+      "missing": ["Named competitors and comparison"]
+    },
+    "fundraise": {
+      "summary": "Raising a $4.0M Seed on a SAFE with a $16M post-money valuation cap.",
+      "metrics": [
+        {"id": "raise_target", "label": "Seed raise (SAFE)", "value": "$4.0M", "numeric_value": 4000000, "unit": "USD", "kind": "raise_target", "timeframe": "n/a", "evidence": "reported", "source_refs": ["Slide 8"]},
+        {"id": "valuation_cap", "label": "post-money valuation cap", "value": "$16M", "numeric_value": 16000000, "unit": "USD", "kind": "valuation_cap", "timeframe": "n/a", "evidence": "reported", "source_refs": ["Slide 8"]},
+        {"id": "cash_received", "label": "received from angels", "value": "$0.6M", "numeric_value": 600000, "unit": "USD", "kind": "cash_received", "timeframe": "actual", "evidence": "reported", "source_refs": ["Slide 8"]},
+        {"id": "soft_circled", "label": "soft-circled (not committed)", "value": "$1.5M", "numeric_value": 1500000, "unit": "USD", "kind": "commitment_verbal", "timeframe": "n/a", "evidence": "reported", "source_refs": ["Slide 8"]},
+        {"id": "raise_remaining", "label": "still to raise after cash received", "value": "$3.4M", "numeric_value": 3400000, "unit": "USD", "kind": "raise_remaining", "timeframe": "n/a", "evidence": "calculated", "formula": "Raise target - cash received = $4.0M - $0.6M", "expression": "raise_target - cash_received", "inputs": ["raise_target", "cash_received"], "source_refs": ["Slide 8"]}
+      ],
+      "points": [],
+      "missing": ["Lead investor"]
+    },
+    "use_of_funds": {
+      "summary": "Capital is weighted to product and sales, with an 18-month runway.",
+      "metrics": [
+        {"id": "runway", "label": "runway", "value": "18 months", "numeric_value": 18, "unit": "months", "kind": "runway", "timeframe": "forecast", "evidence": "reported", "source_refs": ["Slide 9"]}
+      ],
+      "points": [],
+      "missing": ["Monthly burn"],
+      "allocations": [
+        {"category": "Product & engineering", "percent": 40, "amount": "$1.6M", "amount_value": 1600000, "evidence": "reported", "source_refs": ["Slide 9"]},
+        {"category": "Sales & marketing", "percent": 35, "amount": "$1.4M", "amount_value": 1400000, "evidence": "reported", "source_refs": ["Slide 9"]},
+        {"category": "Operations", "percent": 15, "amount": "$0.6M", "amount_value": 600000, "evidence": "reported", "source_refs": ["Slide 9"]},
+        {"category": "G&A", "percent": 10, "amount": "$0.4M", "amount_value": 400000, "evidence": "reported", "source_refs": ["Slide 9"]}
+      ],
+      "milestones": [
+        {"text": "$3.5M ARR by end of 2027 (company projection).", "evidence": "reported", "source_refs": ["Slide 9"], "timeframe": "forecast"}
+      ]
+    },
+    "exit": {
+      "summary": "The deck does not state an exit strategy.",
+      "metrics": [],
+      "points": [
+        {"text": "Potential acquirers include cold-chain logistics providers, refrigeration equipment makers and supply-chain software platforms.", "evidence": "estimated", "attribution": "analyst", "assumptions": ["Based on the product category only; no acquirer interest is stated in the deck"]}
+      ],
+      "missing": ["Exit strategy", "Comparable transactions"]
+    }
+  },
+  "analyst_notes": [
+    "ARR is $1.2M (June 2026) on Slide 4 but $1.4M ('current') on Slide 10; the dates may differ, so neither is shown until resolved.",
+    "Revenue figures for 2027E and 2028E on Slide 10 are projections, not results.",
+    "Gross margin of 70% on Slide 10 is a target, not an actual."
+  ],
+  "external_sources": []
+}

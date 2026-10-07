@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Sample outputs are deliverables (the repo root ignores *_onepager.pdf).
+!samples/**/*_onepager.pdf
