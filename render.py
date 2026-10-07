@@ -287,16 +287,16 @@ def render(data: dict, output_path: str) -> None:
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(tbl)
 
     if _has_estimates(data):
         story.append(_HRule(0.5, RULE, space_after=3))
         story.append(Paragraph(_esc(ESTIMATE_NOTE), st["note"]))
-        for basis in data.get("estimate_basis") or []:
-            if _s(basis):
-                story.append(Paragraph("•&nbsp;" + _esc(basis), st["note"]))
+        notes = _basis_columns(data.get("estimate_basis") or [], st)
+        if notes:
+            story.append(notes)
 
     doc = SimpleDocTemplate(
         output_path, pagesize=letter,
@@ -307,6 +307,23 @@ def render(data: dict, output_path: str) -> None:
     )
     page_cb = partial(_decorate_page, footer_date=date.today().strftime("%B %d, %Y"))
     doc.build(story, onFirstPage=page_cb, onLaterPages=page_cb)
+
+
+def _basis_columns(lines: list, st: dict) -> Table | None:
+    """Estimate assumptions laid out in two columns to save vertical space."""
+    paras = [Paragraph("•&nbsp;" + _esc(b), st["note"]) for b in lines if _s(b)][:6]
+    if not paras:
+        return None
+    half = (len(paras) + 1) // 2
+    col_w = (CONTENT_W - GUTTER) / 2
+    tbl = Table([[paras[:half], "", paras[half:]]], colWidths=[col_w, GUTTER, col_w])
+    tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+    ]))
+    return tbl
 
 
 # --------------------------------------------------------------------------- #

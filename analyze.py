@@ -70,7 +70,8 @@ How to fill the one-pager:
 - Use the deck's own figures wherever they exist, with "is_estimated": false.
 - Where a section has no numbers in the deck, estimate them from industry
   benchmarks for this company's sector and stage, set "is_estimated": true,
-  and add one line to "estimate_basis" explaining the assumption
+  and explain the assumption in "estimate_basis": at most one line per
+  section (6 lines max), each under 20 words, prefixed with the section
   (e.g. "Market size: SAM assumes 12% of the TAM is reachable in the US").
 - Do not invent names, customers, partners, credentials, patents, or deal
   terms. Estimates are for quantities (market size, revenue, margins, runway,
@@ -111,43 +112,44 @@ def _obj(properties: dict) -> dict:
 _STR = {"type": "string"}
 _BOOL = {"type": "boolean"}
 
-_METRIC = _obj({"value": _STR, "label": _STR, "is_estimated": _BOOL})
-_POINT = _obj({"text": _STR, "is_estimated": _BOOL})
+
+def _ref(name: str) -> dict:
+    return {"$ref": f"#/$defs/{name}"}
+
+
+def _array(item: dict) -> dict:
+    return {"type": "array", "items": item}
+
+
+# Shared shapes are defined once and referenced, which keeps the compiled
+# grammar small enough for the API to accept.
 _SECTION_PROPS = {
     "headline": _STR,
-    "metrics": {"type": "array", "items": _METRIC},
-    "points": {"type": "array", "items": _POINT},
+    "metrics": _array(_ref("metric")),
+    "points": _array(_ref("point")),
 }
 
-
-def _section(**extra) -> dict:
-    return _obj({**_SECTION_PROPS, **extra})
-
-
-OUTPUT_SCHEMA = _obj({
-    "company_name": _STR,
-    "tagline": _STR,
-    "sector": _STR,
-    "stage": _STR,
-    "source_attribution": _STR,
-    "deal_snapshot": {"type": "array", "items": _METRIC},
-    "problem": _section(),
-    "solution": _section(),
-    "team": _section(members={
-        "type": "array",
-        "items": _obj({"name": _STR, "role": _STR, "credential": _STR}),
+OUTPUT_SCHEMA = {
+    **_obj({
+        "company_name": _STR,
+        "tagline": _STR,
+        "sector": _STR,
+        "stage": _STR,
+        "source_attribution": _STR,
+        "deal_snapshot": _array(_ref("metric")),
+        **{key: _ref("section") for key in SECTION_KEYS if key not in ("team", "use_of_funds")},
+        "team": _obj({**_SECTION_PROPS, "members": _array(
+            _obj({"name": _STR, "role": _STR, "credential": _STR}))}),
+        "use_of_funds": _obj({**_SECTION_PROPS, "allocation": _array(
+            _obj({"category": _STR, "percent": {"type": "number"}, "is_estimated": _BOOL}))}),
+        "estimate_basis": _array(_STR),
     }),
-    "traction": _section(),
-    "market_size": _section(),
-    "competitive_advantage": _section(),
-    "fundraise": _section(),
-    "use_of_funds": _section(allocation={
-        "type": "array",
-        "items": _obj({"category": _STR, "percent": {"type": "number"}, "is_estimated": _BOOL}),
-    }),
-    "exit": _section(),
-    "estimate_basis": {"type": "array", "items": _STR},
-})
+    "$defs": {
+        "metric": _obj({"value": _STR, "label": _STR, "is_estimated": _BOOL}),
+        "point": _obj({"text": _STR, "is_estimated": _BOOL}),
+        "section": _obj(_SECTION_PROPS),
+    },
+}
 
 
 # --------------------------------------------------------------------------- #
