@@ -168,6 +168,7 @@ def _run_job(job_id: str, in_path: str, stem: str, base_record: dict) -> None:
                     out_path.read_bytes(),
                     download_name,
                     company_name=company_name,
+                    summary=data,
                 )
                 record["mail_status"] = "sent"
                 record["mail_to"] = sent_to

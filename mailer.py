@@ -1,8 +1,9 @@
 """Email a generated one-pager PDF to a fixed recipient.
 
 Used by the web app's background worker: after a deck is analyzed and rendered,
-a copy of the PDF is mailed so a record of every generated document lands in an
-inbox.
+the results are mailed so a record of every generated document lands in an
+inbox. The email body carries the deal snapshot and each section's headline
+figures, and the PDF is attached.
 
 Two transports are supported, chosen from the environment:
 
@@ -21,6 +22,7 @@ be about ``MailError``.
 from __future__ import annotations
 
 import base64
+import html
 import json
 import os
 import smtplib
@@ -33,11 +35,10 @@ from email.message import EmailMessage
 # was built for.
 DEFAULT_RECIPIENT = "info@tencapital.group"
 
-# Resend's shared onboarding sender. It works with no domain verification, but
-# Resend then only allows delivery to the account owner's own email address on
-# the Resend account. Override with $RESEND_FROM once a domain is verified
-# (e.g. "One-Pagers <noreply@yourdomain.com>") to send to any recipient.
-DEFAULT_RESEND_FROM = "onboarding@resend.dev"
+# Sender on tencapital.group, which is verified in Resend; a verified domain is
+# required to deliver to anyone other than the Resend account owner. Override
+# with $RESEND_FROM.
+DEFAULT_RESEND_FROM = "Deal by the Numbers <noreply@tencapital.group>"
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 
@@ -64,9 +65,13 @@ def email_document(
     filename: str,
     *,
     company_name: str = "the company",
+    summary: dict | None = None,
     recipient: str | None = None,
 ) -> str:
     """Email ``pdf_bytes`` as an attachment to ``recipient``.
+
+    When ``summary`` (the analysis JSON) is given, the email body includes the
+    deal snapshot and each section's headline and figures.
 
     Transport selection:
         RESEND_API_KEY set -> send via the Resend HTTPS API (recommended on
@@ -94,17 +99,13 @@ def email_document(
         MailError: no transport is configured, or the send failed.
     """
     to_addr = recipient or os.getenv("MAIL_TO") or DEFAULT_RECIPIENT
-    subject = f"Investor one-pager: {company_name}"
-    body = (
-        f"Attached is the generated one-page investor summary for {company_name}.\n\n"
-        f"File: {filename}\n\n"
-        "— deal-by-numbers"
-    )
+    subject = f"Deal by the Numbers: {company_name}"
+    body, html_body = _compose(company_name, filename, summary or {})
 
     if os.getenv("RESEND_API_KEY"):
-        return _send_via_resend(pdf_bytes, filename, subject, body, to_addr)
+        return _send_via_resend(pdf_bytes, filename, subject, body, html_body, to_addr)
     if _smtp_configured():
-        return _send_via_smtp(pdf_bytes, filename, subject, body, to_addr)
+        return _send_via_smtp(pdf_bytes, filename, subject, body, html_body, to_addr)
 
     raise MailError(
         "Email is not configured. Set RESEND_API_KEY (recommended on Railway) "
@@ -112,8 +113,81 @@ def email_document(
     )
 
 
+# Section keys and titles, in the order they appear on the one-pager.
+_SECTIONS = [
+    ("problem", "Problem"),
+    ("solution", "Solution"),
+    ("team", "Team"),
+    ("traction", "Traction"),
+    ("market_size", "Market Size"),
+    ("competitive_advantage", "Competitive Advantage"),
+    ("fundraise", "Fundraise"),
+    ("use_of_funds", "Use of Funds"),
+    ("exit", "Exit"),
+]
+
+
+def _figure(metric: dict) -> str:
+    text = f"{metric.get('value', '')} {metric.get('label', '')}".strip()
+    return text + (" (est.)" if metric.get("is_estimated") else "")
+
+
+def _compose(company_name: str, filename: str, summary: dict) -> tuple[str, str]:
+    """Build the plain-text and HTML email bodies from the analysis results."""
+    e = html.escape
+    tagline = summary.get("tagline") or ""
+    snapshot = [m for m in summary.get("deal_snapshot") or [] if m.get("value")]
+
+    text = [company_name + (f" — {tagline}" if tagline else ""), ""]
+    parts = [
+        '<div style="font-family:Arial,sans-serif;color:#16283F;max-width:640px">',
+        f'<h2 style="margin:0">{e(company_name)}</h2>',
+    ]
+    if tagline:
+        parts.append(f'<p style="margin:4px 0 12px;color:#5C6E86">{e(tagline)}</p>')
+
+    if snapshot:
+        text.append("DEAL SNAPSHOT")
+        text += [f"  {_figure(m)}" for m in snapshot]
+        text.append("")
+        cells = "".join(
+            '<td style="padding:8px 10px;background:#EAEFF5;text-align:center">'
+            f'<div style="font-size:18px;font-weight:bold">{e(m.get("value", ""))}</div>'
+            f'<div style="font-size:11px;color:#5C6E86">{e(m.get("label", ""))}'
+            f'{" (est.)" if m.get("is_estimated") else ""}</div></td>'
+            for m in snapshot
+        )
+        parts.append(f'<table cellspacing="2" style="margin-bottom:12px"><tr>{cells}</tr></table>')
+
+    for key, title in _SECTIONS:
+        node = summary.get(key) or {}
+        headline = node.get("headline") or ""
+        figures = [_figure(m) for m in node.get("metrics") or [] if m.get("value")]
+        if not (headline or figures):
+            continue
+        text.append(title.upper())
+        if headline:
+            text.append(f"  {headline}")
+        if figures:
+            text.append("  " + " | ".join(figures))
+        text.append("")
+        parts.append(f'<h4 style="margin:12px 0 2px;color:#2A9D9A">{e(title)}</h4>')
+        if headline:
+            parts.append(f'<p style="margin:0 0 2px">{e(headline)}</p>')
+        if figures:
+            parts.append(
+                '<p style="margin:0;font-size:12px;color:#5C6E86">'
+                + " &middot; ".join(e(f) for f in figures) + "</p>"
+            )
+
+    footer = f"Full one-pager attached: {filename}. Figures marked (est.) are analyst estimates."
+    text += [footer, "", "— Deal by the Numbers, TEN Capital Network"]
+    parts.append(f'<p style="margin-top:16px;font-size:12px;color:#5C6E86">{e(footer)}</p></div>')
+    return "\n".join(text), "".join(parts)
+
+
 def _send_via_resend(
-    pdf_bytes: bytes, filename: str, subject: str, body: str, to_addr: str
+    pdf_bytes: bytes, filename: str, subject: str, body: str, html_body: str, to_addr: str
 ) -> str:
     """Send over the Resend HTTPS API (port 443)."""
     api_key = os.getenv("RESEND_API_KEY")
@@ -124,6 +198,7 @@ def _send_via_resend(
         "to": [to_addr],
         "subject": subject,
         "text": body,
+        "html": html_body,
         "attachments": [
             {
                 "filename": filename,
@@ -140,7 +215,7 @@ def _send_via_resend(
             # api.resend.com is behind Cloudflare, which bans urllib's default
             # "Python-urllib/x.y" User-Agent (Cloudflare error 1010). Send a
             # normal UA so the request isn't flagged as a bad bot signature.
-            "User-Agent": "deal-by-numbers/1.0 (+https://github.com/Mateo0G/DealByNumbers)",
+            "User-Agent": "deal-by-numbers/1.0 (+https://github.com/hallmartin-code/Newdealbynumbers)",
         },
         method="POST",
     )
@@ -157,7 +232,7 @@ def _send_via_resend(
 
 
 def _send_via_smtp(
-    pdf_bytes: bytes, filename: str, subject: str, body: str, to_addr: str
+    pdf_bytes: bytes, filename: str, subject: str, body: str, html_body: str, to_addr: str
 ) -> str:
     """Send over SMTP with STARTTLS."""
     host = os.getenv("SMTP_HOST")
@@ -171,6 +246,7 @@ def _send_via_smtp(
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
+    msg.add_alternative(html_body, subtype="html")
     msg.add_attachment(
         pdf_bytes,
         maintype="application",

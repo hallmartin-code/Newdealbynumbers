@@ -14,6 +14,7 @@ import sys
 
 from analyze import AnalysisError, analyze
 from extract import UnsupportedFileError, extract
+from mailer import MailError, email_document, mail_enabled
 from render import render
 
 
@@ -32,6 +33,11 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         "-o",
         help="Output PDF path (default: <input_stem>_onepager.pdf)",
+    )
+    parser.add_argument(
+        "--no-email",
+        action="store_true",
+        help="Skip emailing the results (sent by default when email is configured)",
     )
     args = parser.parse_args(argv)
 
@@ -76,6 +82,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"Done. Wrote {output}")
+
+    # Email the results. A mail failure doesn't fail the run; the PDF is written.
+    if not args.no_email and mail_enabled():
+        company_name = (data.get("company_name") or "the company").strip() or "the company"
+        try:
+            with open(output, "rb") as fh:
+                sent_to = email_document(
+                    fh.read(), os.path.basename(output),
+                    company_name=company_name, summary=data,
+                )
+            print(f"Emailed results to {sent_to}")
+        except MailError as exc:
+            print(f"Warning: email failed: {exc}", file=sys.stderr)
     return 0
 
 

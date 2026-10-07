@@ -121,14 +121,14 @@ The app is ready to deploy on [Railway](https://railway.app) as a web service.
    the server with gunicorn.
 3. **Set the environment variables** in the service's **Variables** tab:
    - `ANTHROPIC_API_KEY` = your key from the Anthropic Console.
-   - To email a copy of every generated one-pager, set **`RESEND_API_KEY`**
-     (from [resend.com](https://resend.com)). Railway **blocks outbound SMTP**,
-     so plain SMTP fails there with `Network is unreachable`; Resend sends over
-     HTTPS and works. With the default `onboarding@resend.dev` sender and no
-     verified domain, Resend only delivers to your Resend account's own email —
-     so sign up with the same address as `MAIL_TO` (defaults to
-     `info@tencapital.group`). Verify a domain and set `RESEND_FROM` to send
-     anywhere. Locally, `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` still work as an
+   - To email the results of every generation, set **`RESEND_API_KEY`**
+     (from [resend.com](https://resend.com)). Each email goes to `MAIL_TO`
+     (defaults to `info@tencapital.group`) with the deal snapshot and every
+     section's headline figures in the body and the PDF attached. It is sent
+     from `noreply@tencapital.group`, so the key's Resend account must have
+     `tencapital.group` verified (override the sender with `RESEND_FROM`).
+     Railway **blocks outbound SMTP**, so plain SMTP fails there with
+     `Network is unreachable`; Resend sends over HTTPS and works. Locally, `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` still work as an
      alternative. If nothing is set the email step is skipped; the PDF is still
      generated and downloadable. See [`.env.example`](.env.example).
    - (optional) `FLASK_SECRET_KEY` = any random string.
