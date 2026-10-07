@@ -9,10 +9,14 @@ would, and generates a clean, single-page investor one-pager PDF.
 1. **Extract** ([extract.py](extract.py)) — pull all text and tables from the
    input file, preserving slide/page/table structure with markers.
 2. **Analyze** ([analyze.py](analyze.py)) — send the extracted content to Claude
-   with a financial-specialist system prompt and get back structured JSON for
-   every section. Missing numbers are filled with clearly-flagged industry
-   estimates.
-3. **Render** ([render.py](render.py)) — lay the JSON out into a professional,
+   as an expert startup financial specialist with this core instruction:
+   *"Review the attached deck and create the investor pitch using numbers that
+   showcase the deal including the problem, solution, team, traction, market
+   size, competitive advantage, fundraise, use of funds, and exit. Summarize
+   into a one pager and estimate for sections that don't have any numbers."*
+   The response is schema-enforced JSON; estimated figures are flagged and the
+   basis for each estimate is recorded.
+3. **Render** ([render.py](render.py)) — lay the JSON out into a numbers-first,
    single US-Letter-page PDF with reportlab.
 
 ## Setup
@@ -48,23 +52,26 @@ Supported input types: `.pptx`, `.pdf`, `.docx`.
 
 ## Output
 
-A polished investor one-pager PDF with a header (company name + tagline) and the
-full 18-section structure from the Investor One-Pager Summary contract:
+A "Deal by the Numbers" one-pager PDF:
 
-Investor Hook · Problem · Solution · Product · Traction · Market Size (TAM/SAM/SOM)
-· Business Model · Competitive Advantage · Go-To-Market · Team · The Ask · Use of
-Funds (bullets + allocation bars) · Financial Outlook (multi-year projection table)
-· Exit Potential · Key Metrics (snapshot table) · Investment Thesis.
+- **Header** — company name, tagline, sector, stage, and source.
+- **Deal snapshot** — five headline figures: raise, valuation, traction, TAM,
+  and target exit or investor return.
+- **Nine section cards in a 3×3 grid**, each with a one-line headline, up to
+  three stat tiles, and short supporting points:
+  - *The opportunity:* Problem · Solution · Team (with named members)
+  - *The proof:* Traction · Market Size (TAM/SAM/SOM) · Competitive Advantage
+  - *The deal:* Fundraise · Use of Funds (allocation bars) · Exit
 
 **Layout — fit-then-flow:** the renderer targets a single US-Letter page with a
 comfortable, readable font and flows onto a second page only when a content-rich
 deck genuinely doesn't fit, rather than shrinking to an unreadable size.
 
 Any figure the model had to estimate (because it wasn't in the deck) is shown in
-*italic* with an **(est.)** suffix, and a footnote notes:
-*"Figures marked (est.) are analyst estimates, not from the deck."* Fields with no
-basis in the deck and no reasonable estimate are rendered as *"Not specified in
-deck"*.
+*italic* and marked **est.**, and a closing note lists the assumption behind each
+estimate so a reader can check it. The model is told to estimate quantities only
+(market size, revenue, runway, allocation, exit value) and never to invent
+names, customers, partners, credentials, or deal terms.
 
 ## Run as a web app (local)
 
@@ -145,20 +152,16 @@ and discarded).
 
 ## Configuration
 
-The Claude model is a constant at the top of [analyze.py](analyze.py):
-
-```python
-MODEL = "claude-sonnet-4-5"
-```
-
-Change that string to use a different model (e.g. `claude-opus-4-8`).
+The Claude model defaults to `claude-opus-5-5`. Set the `CLAUDE_MODEL`
+environment variable (locally in `.env`, or in Railway's Variables tab) to use a
+different one, e.g. `CLAUDE_MODEL=claude-sonnet-5-5`.
 
 ## Error handling
 
 The CLI fails with clear messages for: unsupported/missing files, image-only
 decks with no extractable text, a missing `ANTHROPIC_API_KEY`, API failures,
-and unparseable model responses (the raw response is logged to stderr before
-exit).
+a model refusal, a truncated response, and unparseable model responses (the
+raw response is logged to stderr before exit).
 
 ## Project layout
 

@@ -1,12 +1,13 @@
 """Stage 3 — PDF rendering.
 
-Lay the analyzed JSON (Investor One-Pager Summary contract) out into a clean,
-professional PDF using reportlab's Platypus flowable engine. The layout targets
-a single US-Letter page with a comfortable font and flows to a second page only
-when the content genuinely doesn't fit ("fit-then-flow").
+Lay the analyzed JSON out as a numbers-first investor one-pager using
+reportlab's Platypus engine: a header, a deal-snapshot strip of headline
+figures, then the nine pitch sections as cards in a 3x3 grid (the opportunity,
+the proof, the deal), each leading with large stat tiles. The layout targets a single US-Letter page and
+flows to a second page only when the content genuinely doesn't fit.
 
-Estimated figures are marked in italic with an "(est.)" suffix and explained in
-a closing footnote.
+Estimated figures are set in italic and marked "est.", and the closing note
+lists the basis for each estimate.
 """
 
 from __future__ import annotations
@@ -17,13 +18,12 @@ from functools import partial
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     Flowable,
-    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -37,8 +37,7 @@ MUTED = colors.HexColor("#5C6E86")
 ACCENT = colors.HexColor("#2A9D9A")
 RULE = colors.HexColor("#C4D0E0")
 BAR_BG = colors.HexColor("#EAEFF5")
-TABLE_HEAD_BG = colors.HexColor("#16283F")
-TABLE_ALT_BG = colors.HexColor("#F3F6FA")
+TILE_BG = colors.HexColor("#F3F6FA")
 
 # Brand mark gradient (amber -> coral -> teal), used for the top page bar.
 GRADIENT_STOPS = [
@@ -48,16 +47,24 @@ GRADIENT_STOPS = [
 ]
 GRADIENT_BAR_H = 0.09 * inch
 
-FOOTNOTE = "Figures marked (est.) are analyst estimates, not from the deck."
-NOT_SPECIFIED = "Not specified in deck"
+ESTIMATE_NOTE = "Figures in italics marked est. are analyst estimates, not from the deck."
 
 PAGE_W, PAGE_H = letter
-MARGIN = 0.55 * inch
+MARGIN = 0.5 * inch
 CONTENT_W = PAGE_W - 2 * MARGIN
+GUTTER = 0.16 * inch
 
 BRAND_NAME = "TEN CAPITAL NETWORK"
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "static", "logo-mark.png")
 FOOTER_H = 0.34 * inch
+
+# Section grid, one tuple per row: the opportunity, the proof, the deal.
+LAYOUT = [
+    (("problem", "Problem"), ("solution", "Solution"), ("team", "Team")),
+    (("traction", "Traction"), ("market_size", "Market Size"),
+     ("competitive_advantage", "Competitive Advantage")),
+    (("fundraise", "Fundraise"), ("use_of_funds", "Use of Funds"), ("exit", "Exit")),
+]
 
 
 def _s(v) -> str:
@@ -69,57 +76,61 @@ def _esc(v) -> str:
 
 
 def _est(text: str, flag: bool) -> str:
-    """Return escaped text, appending an italic (est.) marker when estimated."""
+    """Return escaped text, appending an italic est. marker when estimated."""
     body = _esc(text)
-    if flag:
-        return f"{body} <i>(est.)</i>"
-    return body
+    return f"{body} <i>(est.)</i>" if flag else body
 
 
 # --------------------------------------------------------------------------- #
 # Styles
 # --------------------------------------------------------------------------- #
 def _styles() -> dict[str, ParagraphStyle]:
-    base = getSampleStyleSheet()
+    base = getSampleStyleSheet()["Normal"]
     s = {}
     s["title"] = ParagraphStyle(
-        "OP_Title", parent=base["Normal"], fontName="Helvetica-Bold",
+        "OP_Title", parent=base, fontName="Helvetica-Bold",
         fontSize=20, leading=23, textColor=INK,
     )
     s["tagline"] = ParagraphStyle(
-        "OP_Tagline", parent=base["Normal"], fontName="Helvetica",
-        fontSize=10.5, leading=13, textColor=MUTED, spaceAfter=2,
+        "OP_Tagline", parent=base, fontName="Helvetica",
+        fontSize=10, leading=12.5, textColor=MUTED,
+    )
+    s["meta"] = ParagraphStyle(
+        "OP_Meta", parent=base, fontName="Helvetica",
+        fontSize=7.2, leading=9, textColor=MUTED, spaceBefore=1,
+    )
+    s["snap_value"] = ParagraphStyle(
+        "OP_SnapValue", parent=base, fontName="Helvetica-Bold",
+        fontSize=15, leading=17, textColor=INK, alignment=TA_CENTER,
+    )
+    s["snap_label"] = ParagraphStyle(
+        "OP_SnapLabel", parent=base, fontName="Helvetica",
+        fontSize=6.8, leading=8, textColor=MUTED, alignment=TA_CENTER,
     )
     s["section"] = ParagraphStyle(
-        "OP_Section", parent=base["Normal"], fontName="Helvetica-Bold",
-        fontSize=9.5, leading=11, textColor=ACCENT, spaceBefore=7, spaceAfter=1,
+        "OP_Section", parent=base, fontName="Helvetica-Bold",
+        fontSize=9, leading=11, textColor=ACCENT,
     )
-    s["attrib"] = ParagraphStyle(
-        "OP_Attrib", parent=base["Normal"], fontName="Helvetica-Oblique",
-        fontSize=6, leading=7, textColor=MUTED, spaceAfter=2,
+    s["headline"] = ParagraphStyle(
+        "OP_Headline", parent=base, fontName="Helvetica-Bold",
+        fontSize=8, leading=9.8, textColor=INK, spaceAfter=3,
     )
-    s["body"] = ParagraphStyle(
-        "OP_Body", parent=base["Normal"], fontName="Helvetica",
-        fontSize=8.8, leading=11, textColor=INK, alignment=TA_LEFT, spaceAfter=1,
+    s["tile_value"] = ParagraphStyle(
+        "OP_TileValue", parent=base, fontName="Helvetica-Bold",
+        fontSize=11.5, leading=13.5, textColor=ACCENT, alignment=TA_CENTER,
+    )
+    s["tile_label"] = ParagraphStyle(
+        "OP_TileLabel", parent=base, fontName="Helvetica",
+        fontSize=6.2, leading=7.2, textColor=MUTED, alignment=TA_CENTER,
     )
     s["bullet"] = ParagraphStyle(
-        "OP_Bullet", parent=s["body"], leftIndent=9, firstLineIndent=-9,
-        spaceAfter=1.5,
+        "OP_Bullet", parent=base, fontName="Helvetica",
+        fontSize=7.4, leading=9.1, textColor=INK,
+        leftIndent=8, firstLineIndent=-8, spaceAfter=1.2,
     )
-    s["cell"] = ParagraphStyle(
-        "OP_Cell", parent=base["Normal"], fontName="Helvetica",
-        fontSize=7.4, leading=8.8, textColor=INK,
-    )
-    s["cell_head"] = ParagraphStyle(
-        "OP_CellHead", parent=s["cell"], fontName="Helvetica-Bold",
-        textColor=colors.white,
-    )
-    s["cell_label"] = ParagraphStyle(
-        "OP_CellLabel", parent=s["cell"], fontName="Helvetica-Bold",
-    )
-    s["footnote"] = ParagraphStyle(
-        "OP_Footnote", parent=base["Normal"], fontName="Helvetica-Oblique",
-        fontSize=7, leading=8.5, textColor=MUTED, spaceBefore=6,
+    s["note"] = ParagraphStyle(
+        "OP_Note", parent=base, fontName="Helvetica-Oblique",
+        fontSize=6.6, leading=8.2, textColor=MUTED,
     )
     return s
 
@@ -185,19 +196,19 @@ def _decorate_page(canvas, doc, footer_date: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Allocation bar flowable (use-of-funds)
+# Flowables
 # --------------------------------------------------------------------------- #
 class AllocationBars(Flowable):
     """Horizontal percentage bars for use-of-funds allocation."""
 
-    ROW_H = 15
-    BAR_H = 6.5
-    LABEL_FS = 7.6
+    ROW_H = 14
+    BAR_H = 5.5
+    LABEL_FS = 6.8
 
-    def __init__(self, items: list[dict], width: float):
+    def __init__(self, items: list[dict]):
         super().__init__()
         self.items = items
-        self.width = width
+        self.width = 0
         self.height = self.ROW_H * len(items)
 
     def wrap(self, availWidth, availHeight):
@@ -217,9 +228,8 @@ class AllocationBars(Flowable):
             pct = max(0.0, min(pct, 100.0))
 
             c.setFillColor(INK)
-            c.setFont("Helvetica", self.LABEL_FS)
-            label = cat + ("  (est.)" if est else "")
-            c.drawString(0, y + self.BAR_H + 2, label)
+            c.setFont("Helvetica-Oblique" if est else "Helvetica", self.LABEL_FS)
+            c.drawString(0, y + self.BAR_H + 2, cat + ("  (est.)" if est else ""))
             c.setFont("Helvetica-Bold", self.LABEL_FS)
             c.drawRightString(self.width, y + self.BAR_H + 2, f"{pct:g}%")
 
@@ -230,82 +240,14 @@ class AllocationBars(Flowable):
             y -= self.ROW_H
 
 
-# --------------------------------------------------------------------------- #
-# Public entry point
-# --------------------------------------------------------------------------- #
-def render(data: dict, output_path: str) -> None:
-    st = _styles()
-    story: list = []
-
-    _header(story, data, st)
-
-    attrib = _s(data.get("source_attribution"))
-
-    def section(title: str, builder) -> None:
-        """Add a section header + attribution + built flowables, kept together."""
-        block: list = [
-            Paragraph(_esc(title), st["section"]),
-            _rule(0.9, ACCENT, space_before=0, space_after=3),
-        ]
-        if attrib:
-            block.append(Paragraph(_esc(attrib), st["attrib"]))
-        content = builder()
-        if not content:
-            return
-        block.extend(content)
-        story.append(KeepTogether(block))
-
-    section("Investor Hook", lambda: _narrative(data.get("investor_hook"), st))
-    section("Problem", lambda: _bullets(data.get("problem"), st))
-    section("Solution", lambda: _narrative(data.get("solution"), st))
-    section("Product", lambda: _product(data.get("product"), st))
-    section("Traction", lambda: _bullets(data.get("traction"), st))
-    section("Market Size", lambda: _market(data.get("market_size"), st))
-    section("Business Model", lambda: _bullets(data.get("business_model"), st))
-    section("Competitive Advantage", lambda: _bullets(data.get("competitive_advantage"), st))
-    section("Go-To-Market", lambda: _bullets(data.get("go_to_market"), st))
-    section("Team", lambda: _team(data.get("team"), st))
-    section("The Ask", lambda: _fundraise(data.get("fundraise"), st))
-    section("Use of Funds", lambda: _use_of_funds(data.get("use_of_funds"), st))
-    section("Financial Outlook", lambda: _financials(data.get("financial_outlook"), st))
-    section("Exit Potential", lambda: _narrative(data.get("exit_potential"), st))
-    section("Key Metrics", lambda: _key_metrics(data.get("key_metrics"), st))
-    section("Investment Thesis", lambda: _narrative(data.get("investment_thesis"), st))
-
-    if _has_estimates(data):
-        story.append(Paragraph(_esc(FOOTNOTE), st["footnote"]))
-
-    doc = SimpleDocTemplate(
-        output_path, pagesize=letter,
-        leftMargin=MARGIN, rightMargin=MARGIN,
-        topMargin=MARGIN + GRADIENT_BAR_H + 0.05 * inch,
-        bottomMargin=MARGIN + FOOTER_H,
-        title=_s(data.get("company_name")) + " — Investor One-Pager",
-    )
-    page_cb = partial(_decorate_page, footer_date=date.today().strftime("%B %d, %Y"))
-    doc.build(story, onFirstPage=page_cb, onLaterPages=page_cb)
-
-
-# --------------------------------------------------------------------------- #
-# Header
-# --------------------------------------------------------------------------- #
-def _header(story: list, data: dict, st: dict) -> None:
-    name = _s(data.get("company_name")) or "Company"
-    story.append(Paragraph(_esc(name), st["title"]))
-    tagline = _s(data.get("tagline"))
-    if tagline:
-        story.append(Paragraph(_esc(tagline), st["tagline"]))
-    story.append(_rule(1.3, ACCENT, space_before=3, space_after=1))
-
-
 class _HRule(Flowable):
-    def __init__(self, width, thickness, color, space_before, space_after):
+    def __init__(self, thickness, color, space_before=0, space_after=0):
         super().__init__()
-        self.width = width
         self.thickness = thickness
         self.color = color
         self.space_before = space_before
         self.space_after = space_after
+        self.width = 0
         self.height = thickness + space_before + space_after
 
     def wrap(self, availWidth, availHeight):
@@ -314,261 +256,218 @@ class _HRule(Flowable):
 
     def draw(self):
         c = self.canv
-        y = self.space_after
         c.setStrokeColor(self.color)
         c.setLineWidth(self.thickness)
-        c.line(0, y, self.width, y)
-
-
-def _rule(thickness, color, space_before=0, space_after=0) -> _HRule:
-    return _HRule(CONTENT_W, thickness, color, space_before, space_after)
+        c.line(0, self.space_after, self.width, self.space_after)
 
 
 # --------------------------------------------------------------------------- #
-# Section builders — each returns a list of flowables (or [] if empty)
+# Public entry point
 # --------------------------------------------------------------------------- #
-def _narrative(node, st) -> list:
-    body = _s((node or {}).get("body"))
-    if not body:
-        return []
-    return [Paragraph(_esc(body), st["body"])]
+def render(data: dict, output_path: str) -> None:
+    st = _styles()
+    story: list = []
+
+    _header(story, data, st)
+    _snapshot(story, data.get("deal_snapshot") or [], st)
+
+    for row in LAYOUT:
+        n = len(row)
+        card_w = (CONTENT_W - GUTTER * (n - 1)) / n
+        cells, widths = [], []
+        for i, (key, title) in enumerate(row):
+            if i:
+                cells.append("")
+                widths.append(GUTTER)
+            cells.append(_card(data.get(key), title, key, st))
+            widths.append(card_w)
+        tbl = Table([cells], colWidths=widths)
+        tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+        ]))
+        story.append(tbl)
+
+    if _has_estimates(data):
+        story.append(_HRule(0.5, RULE, space_after=3))
+        story.append(Paragraph(_esc(ESTIMATE_NOTE), st["note"]))
+        for basis in data.get("estimate_basis") or []:
+            if _s(basis):
+                story.append(Paragraph("•&nbsp;" + _esc(basis), st["note"]))
+
+    doc = SimpleDocTemplate(
+        output_path, pagesize=letter,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=MARGIN + GRADIENT_BAR_H,
+        bottomMargin=MARGIN + FOOTER_H - 0.1 * inch,
+        title=_s(data.get("company_name")) + " — Deal by the Numbers",
+    )
+    page_cb = partial(_decorate_page, footer_date=date.today().strftime("%B %d, %Y"))
+    doc.build(story, onFirstPage=page_cb, onLaterPages=page_cb)
 
 
-def _bullets(node, st) -> list:
-    bullets = (node or {}).get("bullets") or []
-    out = []
-    for b in bullets:
-        label = _s(b.get("label"))
-        detail = _s(b.get("detail"))
-        est = bool(b.get("is_estimated"))
-        if not (label or detail):
-            continue
-        if label:
-            text = f"<b>{_esc(label)}</b> — {_est(detail, est)}"
-        else:
-            text = _est(detail, est)
-        out.append(Paragraph(f"•&nbsp;&nbsp;{text}", st["bullet"]))
-    return out
+# --------------------------------------------------------------------------- #
+# Header and deal snapshot
+# --------------------------------------------------------------------------- #
+def _header(story: list, data: dict, st: dict) -> None:
+    story.append(Paragraph(_esc(_s(data.get("company_name")) or "Company"), st["title"]))
+    tagline = _s(data.get("tagline"))
+    if tagline:
+        story.append(Paragraph(_esc(tagline), st["tagline"]))
+    meta = [m for m in (_s(data.get("sector")), _s(data.get("stage")),
+                        _s(data.get("source_attribution"))) if m]
+    if meta:
+        story.append(Paragraph("&nbsp;&nbsp;·&nbsp;&nbsp;".join(_esc(m) for m in meta), st["meta"]))
+    story.append(_HRule(1.3, ACCENT, space_before=4, space_after=6))
 
 
-def _product(node, st) -> list:
-    out = _bullets(node, st)
-    summary = _s((node or {}).get("summary"))
-    if summary:
-        out.append(Paragraph(_esc(summary), st["body"]))
-    return out if (out or summary) else []
+def _value_para(metric: dict, style: ParagraphStyle) -> Paragraph:
+    value = _esc(metric.get("value"))
+    if metric.get("is_estimated"):
+        value = f"<i>{value}</i>"
+    return Paragraph(value, style)
 
 
-def _market(node, st) -> list:
+def _label_para(metric: dict, style: ParagraphStyle) -> Paragraph:
+    label = _esc(metric.get("label"))
+    if metric.get("is_estimated"):
+        label += " <i>· est.</i>"
+    return Paragraph(label, style)
+
+
+def _snapshot(story: list, metrics: list, st: dict) -> None:
+    metrics = [m for m in metrics if _s(m.get("value"))][:6]
+    if not metrics:
+        return
+    n = len(metrics)
+    tbl = Table(
+        [[_value_para(m, st["snap_value"]) for m in metrics],
+         [_label_para(m, st["snap_label"]) for m in metrics]],
+        colWidths=[CONTENT_W / n] * n,
+    )
+    cmds = [
+        ("BACKGROUND", (0, 0), (-1, -1), BAR_BG),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, 0), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
+        ("TOPPADDING", (0, 1), (-1, 1), 0),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 7),
+    ]
+    for col in range(1, n):
+        cmds.append(("LINEBEFORE", (col, 0), (col, -1), 0.6, RULE))
+    tbl.setStyle(TableStyle(cmds))
+    story.append(tbl)
+    story.append(Spacer(1, 9))
+
+
+# --------------------------------------------------------------------------- #
+# Section cards
+# --------------------------------------------------------------------------- #
+def _card(node, title: str, key: str, st: dict) -> list:
     node = node or {}
-    out = []
-    for key, label in (("tam", "TAM"), ("sam", "SAM"), ("som", "SOM")):
-        val = _s(node.get(key))
-        if not val:
-            continue
-        est = bool(node.get(f"{key}_is_estimated"))
-        out.append(
-            Paragraph(f"<b>{label}:</b> {_est(val, est)}", st["bullet"])
-        )
+    out: list = [
+        Paragraph(_esc(title).upper(), st["section"]),
+        _HRule(0.8, ACCENT, space_before=1, space_after=3),
+    ]
+    headline = _s(node.get("headline"))
+    if headline:
+        out.append(Paragraph(_esc(headline), st["headline"]))
+
+    tiles = _tiles(node.get("metrics") or [], st)
+    if tiles:
+        out.append(tiles)
+        out.append(Spacer(1, 4))
+
+    if key == "use_of_funds":
+        alloc = [a for a in node.get("allocation") or [] if _s(a.get("category"))]
+        if alloc:
+            out.append(AllocationBars(alloc))
+            out.append(Spacer(1, 3))
+
+    if key == "team":
+        for m in node.get("members") or []:
+            name, role, cred = _s(m.get("name")), _s(m.get("role")), _s(m.get("credential"))
+            if not (name or role):
+                continue
+            line = f"<b>{_esc(name)}</b>" + (f", {_esc(role)}" if role else "")
+            if cred:
+                line += f" — {_esc(cred)}"
+            out.append(Paragraph(f"•&nbsp;&nbsp;{line}", st["bullet"]))
+
+    for p in node.get("points") or []:
+        text = _s(p.get("text"))
+        if text:
+            out.append(Paragraph(f"•&nbsp;&nbsp;{_est(text, bool(p.get('is_estimated')))}", st["bullet"]))
     return out
 
 
-def _team(node, st) -> list:
-    members = (node or {}).get("members") or []
-    out = []
-    for m in members:
-        name = _s(m.get("name"))
-        role = _s(m.get("role"))
-        bio = _s(m.get("bio"))
-        if not (name or role or bio):
-            continue
-        head = "<b>" + _esc(name) + "</b>"
-        if role:
-            head += ", " + _esc(role)
-        line = head + (" — " + _esc(bio) if bio else "")
-        out.append(Paragraph(f"•&nbsp;&nbsp;{line}", st["bullet"]))
-    return out
+def _tiles(metrics: list, st: dict) -> "_TileRow | None":
+    metrics = [m for m in metrics if _s(m.get("value"))][:3]
+    if not metrics:
+        return None
+    return _TileRow(
+        [[_value_para(m, st["tile_value"]) for m in metrics],
+         [_label_para(m, st["tile_label"]) for m in metrics]],
+        len(metrics), gap=3,
+    )
 
 
-def _fundraise(node, st) -> list:
-    node = node or {}
-    out = []
-    body = _s(node.get("body"))
-    if body:
-        out.append(Paragraph(_esc(body), st["body"]))
+class _TileRow(Flowable):
+    """A row of stat tiles that sizes its columns to the space it is given."""
 
-    parts = []
-    amount = _s(node.get("amount"))
-    if amount:
-        parts.append(("Amount", _est(amount, bool(node.get("amount_is_estimated")))))
-    rnd = _s(node.get("round_type"))
-    if rnd:
-        parts.append(("Round", _esc(rnd)))
-    val = _s(node.get("valuation"))
-    if val:
-        parts.append(("Valuation", _est(val, bool(node.get("valuation_is_estimated")))))
-    inst = _s(node.get("instrument"))
-    if inst:
-        parts.append(("Instrument", _esc(inst)))
-    if parts:
-        line = "  •  ".join(f"<b>{lbl}:</b> {v}" for lbl, v in parts)
-        out.append(Paragraph(line, st["body"]))
-    return out
+    def __init__(self, rows, n, gap):
+        super().__init__()
+        self.rows = rows
+        self.n = n
+        self.gap = gap
+        self._table = None
 
-
-def _use_of_funds(node, st) -> list:
-    node = node or {}
-    out = _bullets(node, st)
-    allocation = node.get("allocation") or []
-    valid = [a for a in allocation if _s(a.get("category"))]
-    if valid:
-        out.append(Spacer(1, 3))
-        out.append(AllocationBars(valid, CONTENT_W))
-    return out
-
-
-def _financials(node, st) -> list:
-    node = node or {}
-    out = []
-    body = _s(node.get("body"))
-    if body:
-        out.append(Paragraph(_esc(body), st["body"]))
-
-    years = [_s(y) for y in (node.get("years") or [])]
-    rows = node.get("rows") or []
-    if years and rows:
-        header = [Paragraph("Metric", st["cell_head"])] + [
-            Paragraph(_esc(y), st["cell_head"]) for y in years
+    def _build(self, width):
+        col_w = (width - self.gap * (self.n - 1)) / self.n
+        widths, values, labels = [], [], []
+        for i in range(self.n):
+            if i:
+                widths.append(self.gap)
+                values.append("")
+                labels.append("")
+            widths.append(col_w)
+            values.append(self.rows[0][i])
+            labels.append(self.rows[1][i])
+        tbl = Table([values, labels], colWidths=widths)
+        cmds = [
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
+            ("TOPPADDING", (0, 0), (-1, 0), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 0),
+            ("TOPPADDING", (0, 1), (-1, 1), 1),
+            ("BOTTOMPADDING", (0, 1), (-1, 1), 5),
         ]
-        table_data = [header]
-        n = len(years)
-        for r in rows:
-            metric = _s(r.get("metric"))
-            values = [_s(v) for v in (r.get("values") or [])]
-            flags = list(r.get("is_estimated") or [])
-            # Align values/flags to the year count.
-            values = (values + [""] * n)[:n]
-            flags = (flags + [False] * n)[:n]
-            cells = [Paragraph(f"<b>{_esc(metric)}</b>", st["cell"])]
-            for v, f in zip(values, flags):
-                cells.append(Paragraph(_est(v, bool(f)), st["cell"]))
-            table_data.append(cells)
+        for i in range(self.n):
+            col = i * 2
+            cmds.append(("BACKGROUND", (col, 0), (col, -1), TILE_BG))
+        tbl.setStyle(TableStyle(cmds))
+        return tbl
 
-        metric_w = CONTENT_W * 0.22
-        year_w = (CONTENT_W - metric_w) / n
-        col_widths = [metric_w] + [year_w] * n
-        tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
-        tbl.setStyle(_financial_table_style(len(table_data)))
-        out.append(Spacer(1, 2))
-        out.append(tbl)
-    return out
+    def wrap(self, availWidth, availHeight):
+        self._table = self._build(availWidth)
+        w, h = self._table.wrap(availWidth, availHeight)
+        self.width, self.height = w, h
+        return w, h
 
-
-def _key_metrics(node, st) -> list:
-    node = node or {}
-    fields = [
-        ("Funding Ask", "funding_ask", "funding_ask_is_estimated"),
-        ("Round Type", "round_type", None),
-        ("Pre-Money Valuation", "pre_money_valuation", "pre_money_valuation_is_estimated"),
-        ("Revenue", "revenue", "revenue_is_estimated"),
-        ("YoY Growth", "yoy_growth", "yoy_growth_is_estimated"),
-        ("Gross Margin", "gross_margin", "gross_margin_is_estimated"),
-        ("Key Customer / Partner", "key_customer_or_partner", None),
-        ("Target Market", "target_market", None),
-    ]
-    rows = []
-    for label, key, flag_key in fields:
-        val = _s(node.get(key))
-        if not val:
-            continue
-        est = bool(node.get(flag_key)) if flag_key else False
-        rows.append(
-            [Paragraph(_esc(label), st["cell_label"]),
-             Paragraph(_est(val, est), st["cell"])]
-        )
-    if not rows:
-        return []
-    label_w = CONTENT_W * 0.30
-    tbl = Table(rows, colWidths=[label_w, CONTENT_W - label_w])
-    tbl.setStyle(_snapshot_table_style())
-    return [tbl]
+    def draw(self):
+        self._table.drawOn(self.canv, 0, 0)
 
 
 # --------------------------------------------------------------------------- #
-# Table styles
+# Estimate detection (for the closing note)
 # --------------------------------------------------------------------------- #
-def _financial_table_style(n_rows: int) -> TableStyle:
-    cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), TABLE_HEAD_BG),
-        ("GRID", (0, 0), (-1, -1), 0.4, RULE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-    ]
-    for r in range(1, n_rows):
-        if r % 2 == 0:
-            cmds.append(("BACKGROUND", (0, r), (-1, r), TABLE_ALT_BG))
-    return TableStyle(cmds)
-
-
-def _snapshot_table_style() -> TableStyle:
-    cmds = [
-        ("GRID", (0, 0), (-1, -1), 0.4, RULE),
-        ("BACKGROUND", (0, 0), (0, -1), TABLE_ALT_BG),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-    ]
-    return TableStyle(cmds)
-
-
-# --------------------------------------------------------------------------- #
-# Estimate detection (for the footnote)
-# --------------------------------------------------------------------------- #
-def _has_estimates(data: dict) -> bool:
-    def any_bullet(node) -> bool:
-        return any(b.get("is_estimated") for b in (node or {}).get("bullets") or [])
-
-    if any_bullet(data.get("problem")):
-        return True
-    if any_bullet(data.get("product")):
-        return True
-    if any_bullet(data.get("traction")):
-        return True
-    if any_bullet(data.get("business_model")):
-        return True
-    if any_bullet(data.get("competitive_advantage")):
-        return True
-    if any_bullet(data.get("go_to_market")):
-        return True
-    if any_bullet(data.get("use_of_funds")):
-        return True
-
-    ms = data.get("market_size") or {}
-    if any(ms.get(k) for k in ("tam_is_estimated", "sam_is_estimated", "som_is_estimated")):
-        return True
-
-    fr = data.get("fundraise") or {}
-    if fr.get("amount_is_estimated") or fr.get("valuation_is_estimated"):
-        return True
-
-    for a in (data.get("use_of_funds") or {}).get("allocation") or []:
-        if a.get("is_estimated"):
-            return True
-
-    for r in (data.get("financial_outlook") or {}).get("rows") or []:
-        if any(r.get("is_estimated") or []):
-            return True
-
-    km = data.get("key_metrics") or {}
-    if any(km.get(k) for k in (
-        "funding_ask_is_estimated", "pre_money_valuation_is_estimated",
-        "revenue_is_estimated", "yoy_growth_is_estimated", "gross_margin_is_estimated",
-    )):
-        return True
-
+def _has_estimates(node) -> bool:
+    if isinstance(node, dict):
+        return bool(node.get("is_estimated")) or any(_has_estimates(v) for v in node.values())
+    if isinstance(node, list):
+        return any(_has_estimates(v) for v in node)
     return False
